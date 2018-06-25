@@ -111,30 +111,30 @@ void getGroupingCharacter( PSZ *ppszGrouping )
 void sprintGroup( PSZ buf, long long val, PSZ sep )
 {
     if ( val < 1000 ) {
-        sprintf( buf, "%u", val );
+        sprintf( buf, "%llu", val );
         return;
     }
     sprintGroup( buf, val / 1000, sep );
-    sprintf( buf+strlen(buf), "%s%03u", sep, val % 1000 );
+    sprintf( buf+strlen(buf), "%s%03llu", sep, val % 1000 );
 }
 
 
 void printFormattedSize( long long llValue, BYTE bMode, PSZ pszSep )
 {
-    char achBuf[ 50 ] = {0};
+    char achBuf[ 40 ] = {0};
 
     switch ( bMode & 0x0F ) {
         case MODE_BYTES:
             sprintGroup( achBuf, llValue, pszSep );
             if ( bMode & MODE_VERBOSE )
-                printf("%13s bytes", achBuf );
+                printf("%15s bytes", achBuf );
             else
                 printf("%s bytes", achBuf );
             break;
         case MODE_KBYTES:
             sprintGroup( achBuf, llValue / 1024, pszSep );
             if ( bMode & MODE_VERBOSE )
-                printf("%9s KB", achBuf );
+                printf("%11s KB", achBuf );
             else
                 printf("%s KB", achBuf );
             break;
@@ -142,7 +142,7 @@ void printFormattedSize( long long llValue, BYTE bMode, PSZ pszSep )
         case MODE_MBYTES:
             sprintGroup( achBuf, llValue / 1048576, pszSep );
             if ( bMode & MODE_VERBOSE )
-                printf("%5s MB", achBuf );
+                printf("%7s MB", achBuf );
             else
                 printf("%s MB", achBuf );
             break;
