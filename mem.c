@@ -77,7 +77,7 @@ long long GetXMemSize( void )
         rc = DosDevIOCtl( hf, IOCTL_OEMHLP, OEMHLP_GETMEMINFOEX,
                           NULL, 0L, NULL, &xmi, cb, &cbActual );
         if (( rc == NO_ERROR ) && ( cb == cbActual ))
-            llSize = ( xmi.HiPages * 4096 );
+            llSize = (long long) xmi.HiPages * (long long) 4096;
         DosClose( hf );
     }
     return llSize;
