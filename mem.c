@@ -18,6 +18,9 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define INCL_DOSDEVICES
+#define INCL_DOSDEVIOCTL
+#define INCL_DOSFILEMGR
 #define INCL_DOSMISC
 #define INCL_DOSERRORS
 #include <os2.h>
@@ -47,32 +50,39 @@
 #define MY_MAXHSHMEM    (QSV_MAXHSHMEM - MY_QSV_FIRST)
 
 
-#ifdef LEGACY_C_LOCALE
-void printFormattedSize( ULONG ulValue, BYTE bMode, ... )
+#define OEMHLP_GETMEMINFOEX    0x0011
+
+#pragma pack(1)
+typedef struct _OEMHLP_MEMINFOEX {  // OEMHLP_GETMEMINFOEX packet
+   unsigned long    LoPages;        // # of 4k pages below 4Gb border (except 1st mb)
+   unsigned long    HiPages;        // # of 4k pages above 4Gb
+   unsigned long    AvailPages;     // # of pages, available for OS/2 (except 1st mb)
+} OEMHLP_MEMINFOEX;
+#pragma pack()
+
+
+long long GetXMemSize( void )
 {
-    switch ( bMode & 0x0F ) {
-        case MODE_BYTES:
-            if ( bMode & MODE_VERBOSE )
-                printf("%13'u bytes\n", ulValue );
-            else
-                printf("%'u bytes\n", ulValue );
-            break;
-        case MODE_KBYTES:
-            if ( bMode & MODE_VERBOSE )
-                printf("%9'u KB\n", ulValue / 1024 );
-            else
-                printf("%'u KB\n", ulValue / 1024 );
-            break;
-        default:
-        case MODE_MBYTES:
-            if ( bMode & MODE_VERBOSE )
-                printf("%5'u MB\n", ulValue / 1048576 );
-            else
-                printf("%'u MB\n", ulValue / 1048576 );
-            break;
+    OEMHLP_MEMINFOEX xmi;
+    HFILE    hf;
+    ULONG    ulAction,
+             cb, cbActual;
+    long long llSize = -1;
+    APIRET   rc;
+
+    rc = DosOpen("\\DEV\\OEMHLP$", &hf, &ulAction, 0L, FILE_NORMAL,
+                 OPEN_ACTION_OPEN_IF_EXISTS, OPEN_SHARE_DENYNONE, NULL );
+    if ( rc == NO_ERROR ) {
+        cb = sizeof( xmi );
+        rc = DosDevIOCtl( hf, IOCTL_OEMHLP, OEMHLP_GETMEMINFOEX,
+                          NULL, 0L, NULL, &xmi, cb, &cbActual );
+        if (( rc == NO_ERROR ) && ( cb == cbActual ))
+            llSize = ( xmi.HiPages * 4096 ) + 1048576;
+        DosClose( hf );
     }
+    return llSize;
 }
-#else
+
 
 void getGroupingCharacter( PSZ *ppszGrouping )
 {
@@ -98,7 +108,7 @@ void getGroupingCharacter( PSZ *ppszGrouping )
 }
 
 
-void sprintGroup( PSZ buf, ULONG val, PSZ sep )
+void sprintGroup( PSZ buf, long long val, PSZ sep )
 {
     if ( val < 1000 ) {
         sprintf( buf, "%u", val );
@@ -109,21 +119,20 @@ void sprintGroup( PSZ buf, ULONG val, PSZ sep )
 }
 
 
-void printFormattedSize( ULONG ulValue, BYTE bMode, PSZ pszSep )
+void printFormattedSize( long long llValue, BYTE bMode, PSZ pszSep )
 {
-    char achBuf[ 20 ] = {0};
-    int  rc = 0;
+    char achBuf[ 50 ] = {0};
 
     switch ( bMode & 0x0F ) {
         case MODE_BYTES:
-            sprintGroup( achBuf, ulValue, pszSep );
+            sprintGroup( achBuf, llValue, pszSep );
             if ( bMode & MODE_VERBOSE )
                 printf("%13s bytes\n", achBuf );
             else
                 printf("%s bytes\n", achBuf );
             break;
         case MODE_KBYTES:
-            sprintGroup( achBuf, ulValue / 1024, pszSep );
+            sprintGroup( achBuf, llValue / 1024, pszSep );
             if ( bMode & MODE_VERBOSE )
                 printf("%9s KB\n", achBuf );
             else
@@ -131,28 +140,29 @@ void printFormattedSize( ULONG ulValue, BYTE bMode, PSZ pszSep )
             break;
         default:
         case MODE_MBYTES:
-            sprintGroup( achBuf, ulValue / 1048576, pszSep );
+            sprintGroup( achBuf, llValue / 1048576, pszSep );
             if ( bMode & MODE_VERBOSE )
                 printf("%5s MB\n", achBuf );
             else
                 printf("%s MB\n", achBuf );
             break;
     }
+
 }
-#endif  // LEGACY_C_LOCALE
 
 
 int main( int argc, char *argv[] )
 {
-    ULONG aulBuf[ MY_QSV_LAST - MY_QSV_FIRST + 1 ] = {0},
-          ulMemSize     = 0,
-          ulAvlMemSize  = 0,
-          ulResMemSize  = 0,
-          ulPriMemSize  = 0,
-          ulShdMemSize  = 0,
-          ulPriHMemSize = 0,
-          ulShdHMemSize = 0,
-          ulRC          = 0;
+    ULONG aulBuf[ MY_QSV_LAST - MY_QSV_FIRST + 1 ] = {0};
+    long long ulMemSize     = 0,
+              ulAvlMemSize  = 0,
+              ulResMemSize  = 0,
+              ulPriMemSize  = 0,
+              ulShdMemSize  = 0,
+              ulPriHMemSize = 0,
+              ulShdHMemSize = 0,
+              ulRC          = 0,
+              lXMemSize     = 0;
     BYTE  bMode         = 0;
     BOOL  fCLocale      = FALSE;
     PSZ   pszSep        = NULL,
@@ -163,7 +173,7 @@ int main( int argc, char *argv[] )
      *
      * /? | /H      Show help
      * /L           Force use of C locale (suppresses thousands separators)
-     * /U:[M|K|B]   Units to use for display ([M]iB, [K]iB, B) -- default is M
+     * /U:[G|M|K]   Units to use for display ([G]iB, [M]iB, [K]iB) -- default is M
      * /V           Verbose reporting
      *
      */
@@ -248,6 +258,8 @@ int main( int argc, char *argv[] )
     ulPriHMemSize = aulBuf[ MY_MAXHPRMEM ];
     ulShdHMemSize = aulBuf[ MY_MAXHSHMEM ];
 
+    lXMemSize = GetXMemSize();
+
     psz = getenv("LANG") ;
     if ( !psz || fCLocale )
         setlocale( LC_NUMERIC, "C");
@@ -262,12 +274,22 @@ int main( int argc, char *argv[] )
 
     if ( bMode & MODE_VERBOSE ) {
         printf("\nTotal physical memory:  ");
-        printFormattedSize( ulMemSize, bMode, pszSep );
+        if ( lXMemSize > 0 )
+            printFormattedSize( ulMemSize + lXMemSize, bMode, pszSep );
+        else
+            printFormattedSize( ulMemSize, bMode, pszSep );
+
         printf("\n");
         printf("  Available memory:     ");
         printFormattedSize( ulAvlMemSize, bMode, pszSep  );
         printf("  Resident memory:      ");
         printFormattedSize( ulResMemSize, bMode, pszSep  );
+
+        if ( lXMemSize > 0 ) {
+            printf("  Extended high memory: ");
+            printFormattedSize( lXMemSize, bMode, pszSep );
+        }
+
         printf("\n");
         printf("Available process memory:\n");
         printf("\n");
@@ -281,6 +303,7 @@ int main( int argc, char *argv[] )
         printf("  Shared high memory:   ");
         printFormattedSize( ulShdHMemSize, bMode, pszSep  );
 //        printf("\n");
+
     }
     else {
         printFormattedSize( ulMemSize, bMode, pszSep );
@@ -289,6 +312,5 @@ int main( int argc, char *argv[] )
     if ( pszSep ) free( pszSep );
     return 0;
 }
-
 
 
