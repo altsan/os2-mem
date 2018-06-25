@@ -77,7 +77,7 @@ long long GetXMemSize( void )
         rc = DosDevIOCtl( hf, IOCTL_OEMHLP, OEMHLP_GETMEMINFOEX,
                           NULL, 0L, NULL, &xmi, cb, &cbActual );
         if (( rc == NO_ERROR ) && ( cb == cbActual ))
-            llSize = ( xmi.HiPages * 4096 ) + 1048576;
+            llSize = ( xmi.HiPages * 4096 );
         DosClose( hf );
     }
     return llSize;
@@ -127,24 +127,24 @@ void printFormattedSize( long long llValue, BYTE bMode, PSZ pszSep )
         case MODE_BYTES:
             sprintGroup( achBuf, llValue, pszSep );
             if ( bMode & MODE_VERBOSE )
-                printf("%13s bytes\n", achBuf );
+                printf("%13s bytes", achBuf );
             else
-                printf("%s bytes\n", achBuf );
+                printf("%s bytes", achBuf );
             break;
         case MODE_KBYTES:
             sprintGroup( achBuf, llValue / 1024, pszSep );
             if ( bMode & MODE_VERBOSE )
-                printf("%9s KB\n", achBuf );
+                printf("%9s KB", achBuf );
             else
-                printf("%s KB\n", achBuf );
+                printf("%s KB", achBuf );
             break;
         default:
         case MODE_MBYTES:
             sprintGroup( achBuf, llValue / 1048576, pszSep );
             if ( bMode & MODE_VERBOSE )
-                printf("%5s MB\n", achBuf );
+                printf("%5s MB", achBuf );
             else
-                printf("%s MB\n", achBuf );
+                printf("%s MB", achBuf );
             break;
     }
 
@@ -153,21 +153,21 @@ void printFormattedSize( long long llValue, BYTE bMode, PSZ pszSep )
 
 int main( int argc, char *argv[] )
 {
-    ULONG aulBuf[ MY_QSV_LAST - MY_QSV_FIRST + 1 ] = {0};
-    long long ulMemSize     = 0,
-              ulAvlMemSize  = 0,
-              ulResMemSize  = 0,
-              ulPriMemSize  = 0,
-              ulShdMemSize  = 0,
-              ulPriHMemSize = 0,
-              ulShdHMemSize = 0,
-              ulRC          = 0,
-              lXMemSize     = 0;
-    BYTE  bMode         = 0;
-    BOOL  fCLocale      = FALSE;
-    PSZ   pszSep        = NULL,
-          psz;
-    int   a;
+    ULONG     aulBuf[ MY_QSV_LAST - MY_QSV_FIRST + 1 ] = {0};
+    long long llMemSize     = 0,
+              llAvlMemSize  = 0,
+              llResMemSize  = 0,
+              llPriMemSize  = 0,
+              llShdMemSize  = 0,
+              llPriHMemSize = 0,
+              llShdHMemSize = 0,
+              llXMemSize    = 0;
+    ULONG     ulRC          = 0;
+    BYTE      bMode         = 0;
+    BOOL      fCLocale      = FALSE;
+    PSZ       pszSep        = NULL,
+              psz;
+    int       a;
 
     /* Parse command-line arguments:
      *
@@ -250,15 +250,15 @@ int main( int argc, char *argv[] )
         return ulRC;
     }
 
-    ulMemSize     = aulBuf[ MY_TOTPHYSMEM ];
-    ulAvlMemSize  = aulBuf[ MY_TOTAVAILMEM ];
-    ulResMemSize  = aulBuf[ MY_TOTRESMEM ];
-    ulPriMemSize  = aulBuf[ MY_MAXPRMEM ];
-    ulShdMemSize  = aulBuf[ MY_MAXSHMEM ];
-    ulPriHMemSize = aulBuf[ MY_MAXHPRMEM ];
-    ulShdHMemSize = aulBuf[ MY_MAXHSHMEM ];
+    llMemSize     = aulBuf[ MY_TOTPHYSMEM ];
+    llAvlMemSize  = aulBuf[ MY_TOTAVAILMEM ];
+    llResMemSize  = aulBuf[ MY_TOTRESMEM ];
+    llPriMemSize  = aulBuf[ MY_MAXPRMEM ];
+    llShdMemSize  = aulBuf[ MY_MAXSHMEM ];
+    llPriHMemSize = aulBuf[ MY_MAXHPRMEM ];
+    llShdHMemSize = aulBuf[ MY_MAXHSHMEM ];
 
-    lXMemSize = GetXMemSize();
+    llXMemSize = GetXMemSize();
 
     psz = getenv("LANG") ;
     if ( !psz || fCLocale )
@@ -266,47 +266,63 @@ int main( int argc, char *argv[] )
     else
         setlocale( LC_NUMERIC, psz );
 
-#ifndef LEGACY_C_LOCALE
     if ( !fCLocale )
         getGroupingCharacter( &pszSep );
     if ( pszSep == NULL ) pszSep = strdup("");
-#endif
 
     if ( bMode & MODE_VERBOSE ) {
-        printf("\nTotal physical memory:  ");
-        if ( lXMemSize > 0 )
-            printFormattedSize( ulMemSize + lXMemSize, bMode, pszSep );
-        else
-            printFormattedSize( ulMemSize, bMode, pszSep );
-
-        printf("\n");
-        printf("  Available memory:     ");
-        printFormattedSize( ulAvlMemSize, bMode, pszSep  );
-        printf("  Resident memory:      ");
-        printFormattedSize( ulResMemSize, bMode, pszSep  );
-
-        if ( lXMemSize > 0 ) {
-            printf("  Extended high memory: ");
-            printFormattedSize( lXMemSize, bMode, pszSep );
+        printf("\nTotal physical memory:    ");
+        if ( llXMemSize > 0 ) {
+            printFormattedSize( llMemSize + llXMemSize, bMode, pszSep );
+        printf("\n\nAccessible to system:     ");
+            printFormattedSize( llMemSize, bMode, pszSep );
         }
+        else {
+            printFormattedSize( llMemSize, bMode, pszSep );
+            printf("\n");
+        }
+        printf("\n");
+        printf("  Available memory:       ");
+        printFormattedSize( llAvlMemSize, bMode, pszSep  );
+        printf("\n");
+        printf("  Resident memory:        ");
+        printFormattedSize( llResMemSize, bMode, pszSep  );
+        printf("\n\n");
 
-        printf("\n");
         printf("Available process memory:\n");
+        printf("  Private low memory:     ");
+        printFormattedSize( llPriMemSize, bMode, pszSep  );
         printf("\n");
-        printf("  Private low memory:   ");
-        printFormattedSize( ulPriMemSize, bMode, pszSep  );
-        printf("  Private high memory:  ");
-        printFormattedSize( ulPriHMemSize, bMode, pszSep  );
-//        printf("\n");
-        printf("  Shared low memory:    ");
-        printFormattedSize( ulShdMemSize, bMode, pszSep  );
-        printf("  Shared high memory:   ");
-        printFormattedSize( ulShdHMemSize, bMode, pszSep  );
-//        printf("\n");
+        printf("  Private high memory:    ");
+        printFormattedSize( llPriHMemSize, bMode, pszSep  );
+        printf("\n");
+        printf("  Shared low memory:      ");
+        printFormattedSize( llShdMemSize, bMode, pszSep  );
+        printf("\n");
+        printf("  Shared high memory:     ");
+        printFormattedSize( llShdHMemSize, bMode, pszSep  );
+        printf("\n");
+
+        if ( llXMemSize > 0 ) {
+            printf("\nAdditional high memory:   ");
+            printFormattedSize( llXMemSize, bMode, pszSep );
+            printf("\n");
+        }
 
     }
     else {
-        printFormattedSize( ulMemSize, bMode, pszSep );
+        if ( llXMemSize > 0 ) {
+            printFormattedSize( llMemSize + llXMemSize, bMode, pszSep );
+            printf(" \t(");
+            printFormattedSize( llMemSize, bMode, pszSep );
+            printf(" accessible + ");
+            printFormattedSize( llXMemSize, bMode, pszSep );
+            printf(")");
+        }
+        else {
+            printFormattedSize( llMemSize, bMode, pszSep );
+        }
+        printf("\n");
     }
 
     if ( pszSep ) free( pszSep );
