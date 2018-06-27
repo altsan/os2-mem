@@ -32,6 +32,10 @@
 #include <unidef.h>
 
 
+// -------------------------------------------------------------------------
+// CONSTANTS
+//
+
 #define MODE_BYTES      1
 #define MODE_KBYTES     2
 #define MODE_MBYTES     4
@@ -50,6 +54,10 @@
 #define MY_MAXHSHMEM    (QSV_MAXHSHMEM - MY_QSV_FIRST)
 
 
+// -------------------------------------------------------------------------
+// IOCtl data for AOSLdr extended memory info
+//
+
 #define OEMHLP_GETMEMINFOEX    0x0011
 
 #pragma pack(1)
@@ -61,14 +69,23 @@ typedef struct _OEMHLP_MEMINFOEX {  // OEMHLP_GETMEMINFOEX packet
 #pragma pack()
 
 
-long long GetXMemSize( void )
+
+// -------------------------------------------------------------------------
+// getXMemSize
+//
+// Query the amount of memory above the 4GB barrier, if any.  This
+// information is not reported by DosQuerySysInfo and must be queried
+// from the loader via IOCtl.  Requires the enhanced loader (otherwise
+// -1 will be returned).
+//
+long long getXMemSize( void )
 {
     OEMHLP_MEMINFOEX xmi;
-    HFILE    hf;
-    ULONG    ulAction,
-             cb, cbActual;
+    HFILE     hf;
+    ULONG     ulAction,
+              cb, cbActual;
     long long llSize = -1;
-    APIRET   rc;
+    APIRET    rc;
 
     rc = DosOpen("\\DEV\\OEMHLP$", &hf, &ulAction, 0L, FILE_NORMAL,
                  OPEN_ACTION_OPEN_IF_EXISTS, OPEN_SHARE_DENYNONE, NULL );
@@ -77,13 +94,18 @@ long long GetXMemSize( void )
         rc = DosDevIOCtl( hf, IOCTL_OEMHLP, OEMHLP_GETMEMINFOEX,
                           NULL, 0L, NULL, &xmi, cb, &cbActual );
         if (( rc == NO_ERROR ) && ( cb == cbActual ))
-            llSize = (long long) xmi.HiPages * (long long) 4096;
+            llSize = (long long)xmi.HiPages * 4096;
         DosClose( hf );
     }
     return llSize;
 }
 
 
+// -------------------------------------------------------------------------
+// getGroupingCharacter
+//
+// Determine the numeric thousands-grouping separator for the current locale.
+//
 void getGroupingCharacter( PSZ *ppszGrouping )
 {
     LocaleObject locale = NULL;
@@ -108,6 +130,11 @@ void getGroupingCharacter( PSZ *ppszGrouping )
 }
 
 
+// -------------------------------------------------------------------------
+// sprintGroup
+//
+// Format a 64-bit integer with the indicated thousands-grouping separator.
+//
 void sprintGroup( PSZ buf, long long val, PSZ sep )
 {
     if ( val < 1000 ) {
@@ -119,6 +146,11 @@ void sprintGroup( PSZ buf, long long val, PSZ sep )
 }
 
 
+// -------------------------------------------------------------------------
+// printFormattedSize
+//
+// Print a formatted byte value using the configured units.
+//
 void printFormattedSize( long long llValue, BYTE bMode, PSZ pszSep )
 {
     char achBuf[ 40 ] = {0};
@@ -151,6 +183,9 @@ void printFormattedSize( long long llValue, BYTE bMode, PSZ pszSep )
 }
 
 
+// -------------------------------------------------------------------------
+// main program
+//
 int main( int argc, char *argv[] )
 {
     ULONG     aulBuf[ MY_QSV_LAST - MY_QSV_FIRST + 1 ] = {0};
@@ -258,7 +293,7 @@ int main( int argc, char *argv[] )
     llPriHMemSize = aulBuf[ MY_MAXHPRMEM ];
     llShdHMemSize = aulBuf[ MY_MAXHSHMEM ];
 
-    llXMemSize = GetXMemSize();
+    llXMemSize = getXMemSize();
 
     psz = getenv("LANG") ;
     if ( !psz || fCLocale )
@@ -274,19 +309,20 @@ int main( int argc, char *argv[] )
         printf("\nTotal physical memory:    ");
         if ( llXMemSize > 0 ) {
             printFormattedSize( llMemSize + llXMemSize, bMode, pszSep );
-        printf("\n\nAccessible to system:     ");
+            printf("\nAccessible to system:     ");
             printFormattedSize( llMemSize, bMode, pszSep );
+            printf("\nAdditional (PAE) memory:  ");
+            printFormattedSize( llXMemSize, bMode, pszSep );
         }
         else {
             printFormattedSize( llMemSize, bMode, pszSep );
-            printf("\n");
         }
-        printf("\n");
-        printf("  Available memory:       ");
-        printFormattedSize( llAvlMemSize, bMode, pszSep  );
-        printf("\n");
-        printf("  Resident memory:        ");
+        printf("\n\n");
+        printf("Resident memory:          ");
         printFormattedSize( llResMemSize, bMode, pszSep  );
+        printf("\n");
+        printf("Available virtual memory: ");
+        printFormattedSize( llAvlMemSize, bMode, pszSep  );
         printf("\n\n");
 
         printf("Available process memory:\n");
@@ -302,22 +338,13 @@ int main( int argc, char *argv[] )
         printf("  Shared high memory:     ");
         printFormattedSize( llShdHMemSize, bMode, pszSep  );
         printf("\n");
-
-        if ( llXMemSize > 0 ) {
-            printf("\nAdditional high memory:   ");
-            printFormattedSize( llXMemSize, bMode, pszSep );
-            printf("\n");
-        }
-
     }
     else {
         if ( llXMemSize > 0 ) {
             printFormattedSize( llMemSize + llXMemSize, bMode, pszSep );
-            printf(" \t(");
+            printf("  (");
             printFormattedSize( llMemSize, bMode, pszSep );
-            printf(" accessible + ");
-            printFormattedSize( llXMemSize, bMode, pszSep );
-            printf(")");
+            printf(" accessible to system)");
         }
         else {
             printFormattedSize( llMemSize, bMode, pszSep );
