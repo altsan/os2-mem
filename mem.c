@@ -255,12 +255,14 @@ int main( int argc, char *argv[] )
     }
 
     if ( bMode == MODE_HELP ) {
-        PSZ pszCommand = strdup( argv[0] ),
-            p;
+        PSZ p,
+            pszCommand = strdup( argv[0] );
 
         if ( pszCommand ) {
             if (( p = strchr( pszCommand, '.')) != NULL )
                 *p = 0;
+            if (( p = strrchr( pszCommand, '\\')) != NULL )
+                p++;
             else
                 p = pszCommand;
             strupr( p );
